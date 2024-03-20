@@ -107,9 +107,70 @@ static void render_to_cairo(cairo_t *cairo, struct wsk_state *state,
 		bool special = false;
 		const char *name = key->utf8;
 		if (!name[0]) {
-			special = true;
+			special = false;
 			cairo_set_source_u32(cairo, state->specialfg);
-			name = key->name;
+
+            if (strcmp(key->name, "Return") == 0) {
+                name = "⏎";
+            } else if (strcmp(key->name, "Tab") == 0 || strcmp(key->name, "ISO_Left_Tab") == 0) {
+                name = "⇥";
+            } else if (strcmp(key->name, "BackSpace") == 0) {
+                name = "⇤";
+            } else if (strcmp(key->name, "space") == 0) {
+                name = "␣";
+            } else if (strcmp(key->name, "Control_L") == 0 || strcmp(key->name, "Control_R") == 0) {
+                name = "<Ctrl>";
+                special = true;
+            } else if (strcmp(key->name, "Alt_L") == 0 || strcmp(key->name, "Alt_R") == 0) {
+                name = "<Alt>";
+                special = true;
+            } else if (strcmp(key->name, "ISO_Level3_Shift") == 0) {
+               name = "<AltGr>";
+                special = true;
+            } else if (strcmp(key->name, "Shift_L") == 0 || strcmp(key->name, "Shift_R") == 0) {
+                name = "<Shift>";
+                special = true;
+            } else if (strcmp(key->name, "Super_L") == 0 || strcmp(key->name, "Super_R") == 0) {
+                name = "<Super>";
+                special = true;
+            } else if (strcmp(key->name, "Caps_Lock") == 0) {
+                name = "⇪";
+            } else if (strcmp(key->name, "Escape") == 0) {
+                name = "Esc";
+            } else if (strcmp(key->name, "\U000007F0") == 0) {
+                name = "Del";
+            } else if (strcmp(key->name, "Insert") == 0) {
+                name = "Ins";
+            } else if (strcmp(key->name, "Prior") == 0) {
+                name = "PgUp";
+            } else if (strcmp(key->name, "Next") == 0) {
+                name = "PgDn";
+            } else if (strcmp(key->name, "Up") == 0) {
+                name = "↑";
+            } else if (strcmp(key->name, "Down") == 0) {
+                name = "↓";
+            } else if (strcmp(key->name, "Left") == 0) {
+                name = "←";
+            } else if (strcmp(key->name, "Right") == 0) {
+                name = "→";
+            } else if (strcmp(key->name, "dead_circumflex") == 0) {
+                name = "^";
+                special = true;
+            } else if (strcmp(key->name, "dead_tilde") == 0) {
+                name = "~";
+                special = true;
+            } else if (strcmp(key->name, "dead_grave") == 0) {
+                name = "`";
+                special = true;
+            } else if (strcmp(key->name, "dead_acute") == 0) {
+                name = "´";
+                special = true;
+            } else if (strcmp(key->name, "dead_diaeresis") == 0) {
+                name = "¨";
+                special = true;
+            } else {
+                name = key->name;
+            }
 		} else {
 			cairo_set_source_u32(cairo, state->foreground);
 		}
