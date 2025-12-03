@@ -1,4 +1,4 @@
-# wshowkeys
+# wl-showkeys
 
 Displays keypresses on screen on supported Wayland compositors (requires
 `wlr_layer_shell_v1` support).
@@ -7,9 +7,13 @@ Displays keypresses on screen on supported Wayland compositors (requires
 
 Forked from https://git.sr.ht/~sircmpwn/wshowkeys as Drew has moved onto other thigns.
 
+Then forked again to enhance character replacements.
+
+Then migrated to Rust, because why not.
+
 ## Installation
 
-Dependencies:
+These dependencies should be available on your linux system
 
 - cairo
 - libinput
@@ -18,20 +22,22 @@ Dependencies:
 - wayland 
 - xkbcommon 
 
+## Compilation
+
 ```
-$ meson build
-$ ninja -C build
-# ninja -C build install
-# chmod a+s /usr/bin/wshowkeys
+cargo build
+sudo chown root target/release/wl-showkeys
+sudo chmod u+s target/release/wl-showkeys
+./target/release/wl-showkeys
 ```
 
-wshowkeys must be configured as setuid during installation. It requires root
+wl-showkeys must be configured as setuid during installation. It requires root
 permissions to read input events. These permissions are dropped after startup.
 
 ## Usage
 
 ```
-wshowkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
+wl-showkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
     [-a top|left|right|bottom] [-m margin] [-o output]
 ```
 
@@ -43,5 +49,5 @@ wshowkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
 - *-a top|left|right|bottom*: anchor the keystrokes to an edge. May be specified
   twice.
 - *-m margin*: set a margin (in pixels) from the nearest edge
-- *-o output*: request wshowkeys is shown on the specified output
+- *-o output*: request wl-showkeys is shown on the specified output
   (unimplemented)

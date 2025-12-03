@@ -1,0 +1,27 @@
+[package]
+name = "wl-showkeys"
+version = "0.1.0"
+edition = "2021"
+authors = ["Benjamin Legrand"]
+license = "GPL-3.0"
+description = "A Wayland tool that displays keypresses on screen"
+
+[dependencies]
+# Cairo and Pango for rendering
+cairo-rs = "0.21"
+pango = "0.21"
+pangocairo = "0.21"
+
+# Wayland protocols
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+# Input handling
+input = "0.9"
+udev = "0.9"
+xkbcommon = { version = "0.9", features = ["wayland"] }
+
+# System libraries
+libc = "0.2"
+nix = { version = "0.29", features = ["process", "socket", "poll", "time", "mman", "uio", "user"] }
