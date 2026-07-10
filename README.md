@@ -1,15 +1,14 @@
 # wl-showkeys
 
-Displays keypresses on screen on supported Wayland compositors (requires
-`wlr_layer_shell_v1` support).
+Displays keypresses on screen on supported Wayland compositors (requires `wlr_layer_shell_v1` support).
 
-![](https://sr.ht/xGs2.png)
+Forked from <https://git.sr.ht/~sircmpwn/wshowkeys> as Drew has moved onto other things.
 
-Forked from https://git.sr.ht/~sircmpwn/wshowkeys as Drew has moved onto other thigns.
+Then forked again from <https://github.com/ammgws/wshowkeys> to enhance character replacements.
 
-Then forked again to enhance character replacements.
+Then migrated to Rust by benjilegnard (and claude).
 
-Then migrated to Rust, because why not.
+Then renamed to `wl-showkeys` and enhanced.
 
 ## Installation
 
@@ -28,11 +27,12 @@ These dependencies should be available on your linux system
 cargo build --release
 sudo chown root target/release/wl-showkeys
 sudo chmod u+s target/release/wl-showkeys
-./target/release/wl-showkeys
+cp ./target/release/wl-showkeys ~/.local/bin/
 ```
 
-wl-showkeys must be configured as setuid during installation. It requires root
-permissions to read input events. These permissions are dropped after startup.
+`wl-showkeys` must be configured as setuid during installation.
+It requires root permissions to read input events.
+These permissions are dropped after startup.
 
 ## Usage
 
@@ -51,3 +51,13 @@ wl-showkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
 - *-m margin*: set a margin (in pixels) from the nearest edge
 - *-o output*: request wl-showkeys is shown on the specified output
   (unimplemented)
+
+## Roadmap / Todolist
+
+- [ ] add the ability to configure it with a `~/.config/showkeys/config.toml` file
+- [ ] args should be handled better and override config
+- [ ] add the ability to chose output and draw on specified screen
+- [ ] more configuration options (spacing ?, color?)
+- [ ] handle special characters better
+- [ ] automatic install script / distro packages ?
+
