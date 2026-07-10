@@ -12,7 +12,7 @@ use nix::sys::socket::{
 use nix::sys::wait::waitpid;
 use nix::unistd::{fork, geteuid, getgid, getuid, setgid, setuid, ForkResult, Pid};
 use std::io;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 const PATH_MAX: usize = 4096;
 

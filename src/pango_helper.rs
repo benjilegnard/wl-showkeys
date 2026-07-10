@@ -1,5 +1,5 @@
 use cairo::Context;
-use pango::{AttrList, Attribute, FontDescription, Layout};
+use pango::{AttrList, FontDescription, Layout};
 use pangocairo::functions::{create_layout, show_layout, update_layout};
 
 pub fn get_pango_layout(cairo: &Context, font: &str, text: &str, scale: f64) -> Layout {

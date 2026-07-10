@@ -3,7 +3,7 @@ use cairo::{Context, Format, ImageSurface};
 use nix::sys::mman::{mmap, munmap, MapFlags, ProtFlags};
 use nix::time::{clock_gettime, ClockId};
 use std::ffi::CString;
-use std::os::fd::{AsFd, BorrowedFd, OwnedFd, FromRawFd};
+use std::os::fd::{AsFd, OwnedFd, FromRawFd};
 use std::os::unix::io::RawFd;
 use std::ptr::NonNull;
 use wayland_client::protocol::wl_buffer::WlBuffer;

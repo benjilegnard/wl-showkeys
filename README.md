@@ -25,7 +25,7 @@ These dependencies should be available on your linux system
 ## Compilation
 
 ```
-cargo build
+cargo build --release
 sudo chown root target/release/wl-showkeys
 sudo chmod u+s target/release/wl-showkeys
 ./target/release/wl-showkeys

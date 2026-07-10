@@ -2,21 +2,18 @@ mod devmgr;
 mod pango_helper;
 mod shm;
 
-use cairo::{Context, Format, Operator, RecordingSurface};
+use cairo::{Context, Operator, RecordingSurface};
 use devmgr::DevMgr;
 use input::event::keyboard::{KeyState, KeyboardEventTrait};
-use input::event::EventTrait;
 use input::{Event, Libinput};
 use nix::poll::{poll, PollFd, PollFlags};
 use nix::sys::time::{TimeSpec, TimeValLike};
 use nix::time::{clock_gettime, ClockId};
 use pango_helper::{get_text_size, pango_printf};
 use shm::PoolBuffer;
-use std::cell::RefCell;
 use std::collections::LinkedList;
 use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::os::fd::OwnedFd;
-use std::rc::Rc;
 // udev Context is not available in this version, we'll handle differently
 use wayland_client::protocol::{
     wl_compositor, wl_keyboard, wl_output, wl_registry, wl_seat, wl_shm, wl_surface,
