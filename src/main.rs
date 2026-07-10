@@ -12,7 +12,7 @@ use nix::time::{clock_gettime, ClockId};
 use pango_helper::{get_text_size, pango_printf};
 use shm::PoolBuffer;
 use std::collections::LinkedList;
-use std::os::unix::io::{AsRawFd, IntoRawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::fd::OwnedFd;
 // udev Context is not available in this version, we'll handle differently
 use wayland_client::protocol::{
@@ -260,14 +260,26 @@ impl AppState {
             || width / scale as u32 != self.width
             || self.width == 0
         {
-            // Reconfigure surface
-            if let Some(ref surface) = self.surface {
+            // Reconfigure surface. Clone the proxy so we can also mutate
+            // self.width/self.height without a borrow conflict.
+            let surface = self.surface.clone();
+            if let Some(surface) = surface {
                 if width == 0 || height == 0 {
+                    // No content: unmap the surface. wlroots clears the surface's
+                    // "configured" state on unmap, so forget our cached size to
+                    // force a fresh configure handshake before the next buffer;
+                    // otherwise a same-size keypress would commit a buffer onto an
+                    // unconfigured surface ("layer_surface has never been configured").
                     surface.attach(None, 0, 0);
-                } else if let Some(ref layer_surface) = self.layer_surface {
-                    layer_surface.set_size(width / scale as u32, height / scale as u32);
+                    surface.commit();
+                    self.width = 0;
+                    self.height = 0;
+                } else {
+                    if let Some(ref layer_surface) = self.layer_surface {
+                        layer_surface.set_size(width / scale as u32, height / scale as u32);
+                    }
+                    surface.commit();
                 }
-                surface.commit();
             }
         } else if height > 0 {
             // Render to shm buffer
@@ -503,26 +515,46 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for AppState {
         if let wl_keyboard::Event::Keymap { format, fd, size } = event {
             if let wayland_client::WEnum::Value(fmt) = format {
                 if fmt == wl_keyboard::KeymapFormat::XkbV1 {
-                    use std::os::unix::io::FromRawFd;
-                    let file = unsafe { std::fs::File::from_raw_fd(fd.as_raw_fd()) };
-                use std::io::Read;
-                let mut contents = String::new();
-                let mut reader = std::io::BufReader::new(file);
-                if reader.read_to_string(&mut contents).is_ok() {
-                    if let Some(ref context) = state.xkb_context {
-                        if let Some(keymap) = xkb::Keymap::new_from_string(
-                            context,
-                            contents,
-                            xkb::KEYMAP_FORMAT_TEXT_V1,
-                            xkb::KEYMAP_COMPILE_NO_FLAGS,
-                        ) {
-                            state.xkb_state = Some(xkb::State::new(&keymap));
-                            state.xkb_keymap = Some(keymap);
+                    use nix::sys::mman::{mmap, munmap, MapFlags, ProtFlags};
+                    use std::num::NonZeroUsize;
+
+                    let len = match NonZeroUsize::new(size as usize) {
+                        Some(l) => l,
+                        None => return,
+                    };
+
+                    // mmap the keymap read-only. `fd` is borrowed here and stays
+                    // owned by the event, so it is closed exactly once on drop.
+                    let map = unsafe {
+                        mmap(None, len, ProtFlags::PROT_READ, MapFlags::MAP_PRIVATE, &fd, 0)
+                    };
+
+                    if let Ok(ptr) = map {
+                        let bytes = unsafe {
+                            std::slice::from_raw_parts(ptr.as_ptr() as *const u8, size as usize)
+                        };
+                        // Wayland NUL-terminates the keymap within `size`; xkbcommon
+                        // must not see the trailing NUL or any padding after it.
+                        let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+                        if let Ok(text) = std::str::from_utf8(&bytes[..end]) {
+                            if let Some(ref context) = state.xkb_context {
+                                if let Some(keymap) = xkb::Keymap::new_from_string(
+                                    context,
+                                    text.to_string(),
+                                    xkb::KEYMAP_FORMAT_TEXT_V1,
+                                    xkb::KEYMAP_COMPILE_NO_FLAGS,
+                                ) {
+                                    state.xkb_state = Some(xkb::State::new(&keymap));
+                                    state.xkb_keymap = Some(keymap);
+                                }
+                            }
+                        }
+                        unsafe {
+                            let _ = munmap(ptr, size as usize);
                         }
                     }
                 }
             }
-        }
         }
     }
 }
@@ -588,7 +620,7 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for AppState {
         event: zwlr_layer_surface_v1::Event,
         _: &(),
         _: &Connection,
-        _qh: &QueueHandle<Self>,
+        qh: &QueueHandle<Self>,
     ) {
         match event {
             zwlr_layer_surface_v1::Event::Configure {
@@ -599,8 +631,9 @@ impl Dispatch<zwlr_layer_surface_v1::ZwlrLayerSurfaceV1, ()> for AppState {
                 state.width = width;
                 state.height = height;
                 layer_surface.ack_configure(serial);
-                // Can't call set_dirty here without more refactoring
-                state.dirty = true;
+                // Ack, then render synchronously (like the C original) so the
+                // ack always reaches the compositor before any buffer commit.
+                state.set_dirty(qh);
             }
             zwlr_layer_surface_v1::Event::Closed => {
                 state.run = false;
@@ -632,6 +665,7 @@ fn parse_color(color: &str) -> u32 {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start device manager (runs as root initially)
     let devmgr = DevMgr::start(INPUT_DEV_PATH)?;
+    let devmgr_fd = devmgr.fd;
 
     // Now running as normal user
     let mut state = AppState::new();
@@ -704,24 +738,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         i += 1;
     }
 
-    // Initialize udev and libinput
-    struct Interface;
+    // Initialize udev and libinput. Devices are opened through the privileged
+    // devmgr child, since we've dropped root and can't open /dev/input directly.
+    struct Interface {
+        devmgr_fd: RawFd,
+    }
     impl input::LibinputInterface for Interface {
-        fn open_restricted(&mut self, path: &std::path::Path, flags: i32) -> Result<OwnedFd, i32> {
-            use std::os::unix::fs::OpenOptionsExt;
+        fn open_restricted(&mut self, path: &std::path::Path, _flags: i32) -> Result<OwnedFd, i32> {
             use std::os::fd::FromRawFd;
-            std::fs::OpenOptions::new()
-                .custom_flags(flags)
-                .read(true)
-                .open(path)
-                .map(|f| unsafe { OwnedFd::from_raw_fd(f.into_raw_fd()) })
-                .map_err(|e| e.raw_os_error().unwrap_or(-1))
+            let path_str = path.to_str().ok_or(libc::EINVAL)?;
+            match devmgr::open_device(self.devmgr_fd, path_str) {
+                Ok(fd) => Ok(unsafe { OwnedFd::from_raw_fd(fd) }),
+                Err(_) => Err(libc::EACCES),
+            }
         }
         fn close_restricted(&mut self, fd: OwnedFd) {
             drop(fd); // OwnedFd automatically closes on drop
         }
     }
-    let mut libinput = Libinput::new_with_udev(Interface);
+    let mut libinput = Libinput::new_with_udev(Interface { devmgr_fd });
     libinput.udev_assign_seat("seat0").map_err(|_| "Failed to assign seat")?;
     state.libinput = Some(libinput);
 
@@ -778,6 +813,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Store devmgr
     state.devmgr = Some(devmgr);
+
+    // Receive and acknowledge the initial configure before entering the loop,
+    // so the surface is guaranteed to be configured before we attach a buffer.
+    event_queue.roundtrip(&mut state).map_err(|e| format!("Roundtrip error: {:?}", e))?;
 
     // Main event loop
     let wl_fd_raw = event_queue.prepare_read().unwrap().connection_fd().as_raw_fd();

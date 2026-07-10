@@ -12,7 +12,7 @@ use nix::sys::socket::{
 use nix::sys::wait::waitpid;
 use nix::unistd::{fork, geteuid, getgid, getuid, setgid, setuid, ForkResult, Pid};
 use std::io;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{IntoRawFd, RawFd};
 
 const PATH_MAX: usize = 4096;
 
@@ -77,6 +77,13 @@ fn recv_msg(sock: RawFd) -> Result<(Msg, Option<RawFd>), Box<dyn std::error::Err
     let mut cmsg_space = nix::cmsg_space!([RawFd; 1]);
 
     let msg_result = recvmsg::<()>(sock, &mut iov, Some(&mut cmsg_space), MsgFlags::MSG_CMSG_CLOEXEC)?;
+
+    // A 0-byte read means the peer closed the socket (EOF). Report it as an
+    // error instead of returning a zeroed Msg, which would otherwise be
+    // misread as an Open request with an empty path ("path traversal").
+    if msg_result.bytes == 0 {
+        return Err("devmgr: connection closed".into());
+    }
 
     let mut fd = None;
     if let Ok(cmsg_iter) = msg_result.cmsgs() {
@@ -163,6 +170,34 @@ fn devmgr_run(sockfd: RawFd, devpath: &str) -> ! {
     }
 }
 
+/// Ask the privileged devmgr child to open `path` and return the received fd.
+/// Used both by `DevMgr::open` and by libinput's `open_restricted`.
+pub fn open_device(sockfd: RawFd, path: &str) -> Result<RawFd, Box<dyn std::error::Error>> {
+    let mut msg = Msg::new(MsgType::Open);
+    msg.set_path(path);
+
+    send_msg(sockfd, None, &msg)?;
+
+    for retry in 0..3 {
+        match recv_msg(sockfd) {
+            Ok((response, fd)) => {
+                let errno_bytes: [u8; 4] = response.path[..4].try_into().unwrap();
+                let errno = i32::from_ne_bytes(errno_bytes);
+
+                if errno != 0 {
+                    return Err(format!("Failed to open device: errno {}", errno).into());
+                }
+
+                return fd.ok_or_else(|| "No file descriptor received".into());
+            }
+            Err(_) if retry < 2 => continue,
+            Err(e) => return Err(e),
+        }
+    }
+
+    Err("Failed after retries".into())
+}
+
 pub struct DevMgr {
     pub fd: RawFd,
     pub pid: Pid,
@@ -183,7 +218,8 @@ impl DevMgr {
 
         match unsafe { fork()? } {
             ForkResult::Parent { child } => {
-                nix::unistd::close(sock1.as_raw_fd())?;
+                // Close the child's end; keep ours open for the lifetime of DevMgr.
+                drop(sock1);
 
                 // Drop root privileges
                 setgid(getgid())?;
@@ -195,42 +231,23 @@ impl DevMgr {
                 }
 
                 Ok(DevMgr {
-                    fd: sock0.as_raw_fd(),
+                    // into_raw_fd() so the fd is NOT closed when `sock0` drops here;
+                    // DevMgr now owns it and closes it in finish().
+                    fd: sock0.into_raw_fd(),
                     pid: child,
                 })
             }
             ForkResult::Child => {
-                nix::unistd::close(sock0.as_raw_fd()).unwrap();
+                // Close the parent's end; keep ours for the message loop.
+                drop(sock0);
                 let devpath_owned = devpath.to_string();
-                devmgr_run(sock1.as_raw_fd(), &devpath_owned);
+                devmgr_run(sock1.into_raw_fd(), &devpath_owned);
             }
         }
     }
 
     pub fn open(&self, path: &str) -> Result<RawFd, Box<dyn std::error::Error>> {
-        let mut msg = Msg::new(MsgType::Open);
-        msg.set_path(path);
-
-        send_msg(self.fd, None, &msg)?;
-
-        for retry in 0..3 {
-            match recv_msg(self.fd) {
-                Ok((response, fd)) => {
-                    let errno_bytes: [u8; 4] = response.path[..4].try_into().unwrap();
-                    let errno = i32::from_ne_bytes(errno_bytes);
-
-                    if errno != 0 {
-                        return Err(format!("Failed to open device: errno {}", errno).into());
-                    }
-
-                    return fd.ok_or_else(|| "No file descriptor received".into());
-                }
-                Err(e) if retry < 2 => continue,
-                Err(e) => return Err(e),
-            }
-        }
-
-        Err("Failed after retries".into())
+        open_device(self.fd, path)
     }
 
     pub fn finish(self) {
