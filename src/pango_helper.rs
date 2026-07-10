@@ -17,12 +17,7 @@ pub fn get_pango_layout(cairo: &Context, font: &str, text: &str, scale: f64) -> 
     layout
 }
 
-pub fn get_text_size(
-    cairo: &Context,
-    font: &str,
-    scale: f64,
-    text: &str,
-) -> (i32, i32, i32) {
+pub fn get_text_size(cairo: &Context, font: &str, scale: f64, text: &str) -> (i32, i32, i32) {
     let layout = get_pango_layout(cairo, font, text, scale);
     update_layout(cairo, &layout);
 

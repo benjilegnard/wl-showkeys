@@ -3,7 +3,7 @@ use cairo::{Context, Format, ImageSurface};
 use nix::sys::mman::{mmap, munmap, MapFlags, ProtFlags};
 use nix::time::{clock_gettime, ClockId};
 use std::ffi::CString;
-use std::os::fd::{AsFd, OwnedFd, FromRawFd};
+use std::os::fd::{AsFd, FromRawFd, OwnedFd};
 use std::os::unix::io::RawFd;
 use std::ptr::NonNull;
 use wayland_client::protocol::wl_buffer::WlBuffer;
@@ -80,10 +80,7 @@ fn create_shm_file() -> Result<RawFd, std::io::Error> {
         let mut name_bytes = [0u8; 6];
         randname(&mut name_bytes);
 
-        let name = format!(
-            "/wl_shm-{}",
-            std::str::from_utf8(&name_bytes).unwrap()
-        );
+        let name = format!("/wl_shm-{}", std::str::from_utf8(&name_bytes).unwrap());
 
         let c_name = CString::new(name.as_bytes()).unwrap();
 
@@ -137,7 +134,9 @@ fn create_buffer<T>(
     qh: &wayland_client::QueueHandle<T>,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    T: wayland_client::Dispatch<wayland_client::protocol::wl_shm_pool::WlShmPool, ()> + wayland_client::Dispatch<wayland_client::protocol::wl_buffer::WlBuffer, ()> + 'static,
+    T: wayland_client::Dispatch<wayland_client::protocol::wl_shm_pool::WlShmPool, ()>
+        + wayland_client::Dispatch<wayland_client::protocol::wl_buffer::WlBuffer, ()>
+        + 'static,
 {
     let stride = width * 4;
     let size = (stride * height) as usize;
@@ -203,7 +202,9 @@ pub fn get_next_buffer<'a, T>(
     qh: &wayland_client::QueueHandle<T>,
 ) -> Result<&'a mut PoolBuffer, Box<dyn std::error::Error>>
 where
-    T: wayland_client::Dispatch<wayland_client::protocol::wl_shm_pool::WlShmPool, ()> + wayland_client::Dispatch<wayland_client::protocol::wl_buffer::WlBuffer, ()> + 'static,
+    T: wayland_client::Dispatch<wayland_client::protocol::wl_shm_pool::WlShmPool, ()>
+        + wayland_client::Dispatch<wayland_client::protocol::wl_buffer::WlBuffer, ()>
+        + 'static,
 {
     let mut buffer_idx = None;
 

@@ -12,23 +12,20 @@ use nix::time::{clock_gettime, ClockId};
 use pango_helper::{get_text_size, pango_printf};
 use shm::PoolBuffer;
 use std::collections::LinkedList;
-use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::fd::OwnedFd;
+use std::os::unix::io::{AsRawFd, RawFd};
 // udev Context is not available in this version, we'll handle differently
 use wayland_client::protocol::{
     wl_compositor, wl_keyboard, wl_output, wl_registry, wl_seat, wl_shm, wl_surface,
 };
 use wayland_client::{Connection, Dispatch, QueueHandle};
-use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1, zwlr_layer_surface_v1,
-};
+use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1, zwlr_layer_surface_v1};
 use xkbcommon::xkb;
 
 const INPUT_DEV_PATH: &str = "/dev/input";
 
 #[derive(Clone)]
 struct Keypress {
-    sym: xkb::Keysym,
     name: String,
     utf8: String,
 }
@@ -133,13 +130,7 @@ impl AppState {
         );
     }
 
-    fn render_to_cairo(
-        &self,
-        cairo: &Context,
-        scale: i32,
-        width: &mut u32,
-        height: &mut u32,
-    ) {
+    fn render_to_cairo(&self, cairo: &Context, scale: i32, width: &mut u32, height: &mut u32) {
         cairo.set_operator(Operator::Source);
         Self::cairo_set_source_u32(cairo, self.background);
         cairo.paint().unwrap();
@@ -247,7 +238,8 @@ impl AppState {
         cairo.paint().unwrap();
         cairo.restore().unwrap();
 
-        let scale = self.current_output
+        let scale = self
+            .current_output
             .and_then(|idx| self.outputs.get(idx))
             .map(|o| o.scale)
             .unwrap_or(1);
@@ -284,7 +276,13 @@ impl AppState {
         } else if height > 0 {
             // Render to shm buffer
             if let Some(ref shm) = self.shm {
-                match shm::get_next_buffer(shm, &mut self.buffers, width * scale as u32, height * scale as u32, qh) {
+                match shm::get_next_buffer(
+                    shm,
+                    &mut self.buffers,
+                    width * scale as u32,
+                    height * scale as u32,
+                    qh,
+                ) {
                     Ok(buffer) => {
                         if let Some(ref shm_cairo) = buffer.cairo {
                             shm_cairo.save().unwrap();
@@ -343,7 +341,6 @@ impl AppState {
                     };
 
                     let keypress = Keypress {
-                        sym: keysym,
                         name,
                         utf8: utf8_filtered,
                     };
@@ -384,12 +381,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
                     ));
                 }
                 "wl_shm" => {
-                    state.shm = Some(registry.bind::<wl_shm::WlShm, _, _>(
-                        name,
-                        version.min(1),
-                        qh,
-                        (),
-                    ));
+                    state.shm =
+                        Some(registry.bind::<wl_shm::WlShm, _, _>(name, version.min(1), qh, ()));
                 }
                 "wl_seat" => {
                     let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version.min(5), qh, ());
@@ -406,12 +399,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
                     );
                 }
                 "wl_output" => {
-                    let output = registry.bind::<wl_output::WlOutput, _, _>(
-                        name,
-                        version.min(3),
-                        qh,
-                        (),
-                    );
+                    let output =
+                        registry.bind::<wl_output::WlOutput, _, _>(name, version.min(3), qh, ());
                     state.outputs.push(Output {
                         output,
                         scale: 1,
@@ -486,7 +475,7 @@ impl Dispatch<wl_shm::WlShm, ()> for AppState {
 
 impl Dispatch<wl_seat::WlSeat, ()> for AppState {
     fn event(
-        state: &mut Self,
+        _state: &mut Self,
         seat: &wl_seat::WlSeat,
         event: wl_seat::Event,
         _: &(),
@@ -526,7 +515,14 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for AppState {
                     // mmap the keymap read-only. `fd` is borrowed here and stays
                     // owned by the event, so it is closed exactly once on drop.
                     let map = unsafe {
-                        mmap(None, len, ProtFlags::PROT_READ, MapFlags::MAP_PRIVATE, &fd, 0)
+                        mmap(
+                            None,
+                            len,
+                            ProtFlags::PROT_READ,
+                            MapFlags::MAP_PRIVATE,
+                            &fd,
+                            0,
+                        )
                     };
 
                     if let Ok(ptr) = map {
@@ -648,10 +644,7 @@ fn parse_color(color: &str) -> u32 {
 
     let len = color.len();
     if len != 6 && len != 8 {
-        eprintln!(
-            "Invalid color {}, defaulting to 0xFFFFFFFF",
-            color
-        );
+        eprintln!("Invalid color {}, defaulting to 0xFFFFFFFF", color);
         return 0xFFFFFFFF;
     }
 
@@ -745,7 +738,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     impl input::LibinputInterface for Interface {
         fn open_restricted(&mut self, path: &std::path::Path, _flags: i32) -> Result<OwnedFd, i32> {
-            use std::os::fd::FromRawFd;
             let path_str = path.to_str().ok_or(libc::EINVAL)?;
             match devmgr::open_device(self.devmgr_fd, path_str) {
                 Ok(fd) => Ok(unsafe { OwnedFd::from_raw_fd(fd) }),
@@ -757,7 +749,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let mut libinput = Libinput::new_with_udev(Interface { devmgr_fd });
-    libinput.udev_assign_seat("seat0").map_err(|_| "Failed to assign seat")?;
+    libinput
+        .udev_assign_seat("seat0")
+        .map_err(|_| "Failed to assign seat")?;
     state.libinput = Some(libinput);
 
     // Initialize XKB
@@ -770,7 +764,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let qh = event_queue.handle();
 
     let _registry = display.get_registry(&qh, ());
-    event_queue.roundtrip(&mut state).map_err(|e| format!("Roundtrip error: {:?}", e))?;
+    event_queue
+        .roundtrip(&mut state)
+        .map_err(|e| format!("Roundtrip error: {:?}", e))?;
 
     // Check for required globals
     if state.compositor.is_none() {
@@ -783,12 +779,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("zwlr_layer_shell_v1 not available".into());
     }
 
-    event_queue.roundtrip(&mut state).map_err(|e| format!("Roundtrip error: {:?}", e))?;
+    event_queue
+        .roundtrip(&mut state)
+        .map_err(|e| format!("Roundtrip error: {:?}", e))?;
 
     // Create surface and layer surface
-    if let (Some(ref compositor), Some(ref layer_shell)) =
-        (&state.compositor, &state.layer_shell)
-    {
+    if let (Some(ref compositor), Some(ref layer_shell)) = (&state.compositor, &state.layer_shell) {
         let surface = compositor.create_surface(&qh, ());
         let layer_surface = layer_shell.get_layer_surface(
             &surface,
@@ -816,10 +812,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Receive and acknowledge the initial configure before entering the loop,
     // so the surface is guaranteed to be configured before we attach a buffer.
-    event_queue.roundtrip(&mut state).map_err(|e| format!("Roundtrip error: {:?}", e))?;
+    event_queue
+        .roundtrip(&mut state)
+        .map_err(|e| format!("Roundtrip error: {:?}", e))?;
 
     // Main event loop
-    let wl_fd_raw = event_queue.prepare_read().unwrap().connection_fd().as_raw_fd();
+    let wl_fd_raw = event_queue
+        .prepare_read()
+        .unwrap()
+        .connection_fd()
+        .as_raw_fd();
     let libinput_fd_raw = state.libinput.as_ref().unwrap().as_raw_fd();
 
     // Create borrowed FDs for poll
@@ -846,16 +848,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if poll(&mut pollfds, timeout).is_ok() {
             // Clear old keys
             let now = clock_gettime(ClockId::CLOCK_MONOTONIC).unwrap();
-            if !state.keys.is_empty()
-                && now.tv_sec() >= state.last_key.tv_sec() + state.timeout
-            {
+            if !state.keys.is_empty() && now.tv_sec() >= state.last_key.tv_sec() + state.timeout {
                 state.keys.clear();
                 let qh = event_queue.handle();
                 state.set_dirty(&qh);
             }
 
             // Handle libinput events
-            if pollfds[0].revents().unwrap_or(PollFlags::empty()).contains(PollFlags::POLLIN) {
+            if pollfds[0]
+                .revents()
+                .unwrap_or(PollFlags::empty())
+                .contains(PollFlags::POLLIN)
+            {
                 // Collect events first to avoid borrow checker issues
                 let mut events = Vec::new();
                 if let Some(ref mut libinput) = state.libinput {
@@ -876,7 +880,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // Handle Wayland events
-            if pollfds[1].revents().unwrap_or(PollFlags::empty()).contains(PollFlags::POLLIN) {
+            if pollfds[1]
+                .revents()
+                .unwrap_or(PollFlags::empty())
+                .contains(PollFlags::POLLIN)
+            {
                 event_queue.blocking_dispatch(&mut state)?;
             }
         }
@@ -889,4 +897,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

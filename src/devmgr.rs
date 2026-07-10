@@ -55,11 +55,7 @@ impl Msg {
     }
 
     fn get_path(&self) -> &str {
-        let end = self
-            .path
-            .iter()
-            .position(|&c| c == 0)
-            .unwrap_or(PATH_MAX);
+        let end = self.path.iter().position(|&c| c == 0).unwrap_or(PATH_MAX);
         std::str::from_utf8(&self.path[..end]).unwrap_or("")
     }
 }
@@ -67,16 +63,18 @@ impl Msg {
 fn recv_msg(sock: RawFd) -> Result<(Msg, Option<RawFd>), Box<dyn std::error::Error>> {
     let mut msg: Msg = Msg::new(MsgType::Open);
     let msg_bytes = unsafe {
-        std::slice::from_raw_parts_mut(
-            &mut msg as *mut Msg as *mut u8,
-            std::mem::size_of::<Msg>(),
-        )
+        std::slice::from_raw_parts_mut(&mut msg as *mut Msg as *mut u8, std::mem::size_of::<Msg>())
     };
 
     let mut iov = [io::IoSliceMut::new(msg_bytes)];
     let mut cmsg_space = nix::cmsg_space!([RawFd; 1]);
 
-    let msg_result = recvmsg::<()>(sock, &mut iov, Some(&mut cmsg_space), MsgFlags::MSG_CMSG_CLOEXEC)?;
+    let msg_result = recvmsg::<()>(
+        sock,
+        &mut iov,
+        Some(&mut cmsg_space),
+        MsgFlags::MSG_CMSG_CLOEXEC,
+    )?;
 
     // A 0-byte read means the peer closed the socket (EOF). Report it as an
     // error instead of returning a zeroed Msg, which would otherwise be
@@ -146,7 +144,11 @@ fn devmgr_run(sockfd: RawFd, devpath: &str) -> ! {
                     )
                 };
 
-                let errno = if fd >= 0 { 0 } else { io::Error::last_os_error().raw_os_error().unwrap_or(1) };
+                let errno = if fd >= 0 {
+                    0
+                } else {
+                    io::Error::last_os_error().raw_os_error().unwrap_or(1)
+                };
 
                 let mut response = Msg::new(MsgType::Open);
                 let errno_bytes = errno.to_ne_bytes();
@@ -244,10 +246,6 @@ impl DevMgr {
                 devmgr_run(sock1.into_raw_fd(), &devpath_owned);
             }
         }
-    }
-
-    pub fn open(&self, path: &str) -> Result<RawFd, Box<dyn std::error::Error>> {
-        open_device(self.fd, path)
     }
 
     pub fn finish(self) {
