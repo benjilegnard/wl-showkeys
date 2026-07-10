@@ -34,6 +34,7 @@ struct Output {
     output: wl_output::WlOutput,
     scale: i32,
     subpixel: wl_output::Subpixel,
+    name: Option<String>,
 }
 
 struct AppState {
@@ -77,6 +78,9 @@ struct AppState {
     run: bool,
     anchor: u32,
     margin: i32,
+
+    // Name of the output requested via -o, if any.
+    output_name: Option<String>,
 }
 
 impl AppState {
@@ -110,6 +114,7 @@ impl AppState {
             run: true,
             anchor: 0,
             margin: 32,
+            output_name: None,
         }
     }
 
@@ -399,12 +404,15 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
                     );
                 }
                 "wl_output" => {
+                    // Bind v4 when available so we receive the `name` event
+                    // (connector name, e.g. "DP-1") used by the -o option.
                     let output =
-                        registry.bind::<wl_output::WlOutput, _, _>(name, version.min(3), qh, ());
+                        registry.bind::<wl_output::WlOutput, _, _>(name, version.min(4), qh, ());
                     state.outputs.push(Output {
                         output,
                         scale: 1,
                         subpixel: wl_output::Subpixel::Unknown,
+                        name: None,
                     });
                 }
                 _ => {}
@@ -574,6 +582,9 @@ impl Dispatch<wl_output::WlOutput, ()> for AppState {
                 wl_output::Event::Scale { factor } => {
                     state.outputs[idx].scale = factor;
                 }
+                wl_output::Event::Name { name } => {
+                    state.outputs[idx].name = Some(name);
+                }
                 _ => {}
             }
         }
@@ -718,7 +729,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "-o" => {
-                eprintln!("-o is unimplemented");
+                i += 1;
+                if i < args.len() {
+                    state.output_name = Some(args[i].clone());
+                }
             }
             "-h" | "--help" => {
                 eprintln!(
@@ -786,9 +800,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create surface and layer surface
     if let (Some(ref compositor), Some(ref layer_shell)) = (&state.compositor, &state.layer_shell) {
         let surface = compositor.create_surface(&qh, ());
+
+        // Resolve the output requested via -o (by connector name, e.g. "DP-1").
+        // If unset we pass None and let the compositor pick; if the requested
+        // name is not found we warn and fall back to the default.
+        let output = match &state.output_name {
+            Some(wanted) => {
+                let found = state
+                    .outputs
+                    .iter()
+                    .find(|o| o.name.as_deref() == Some(wanted.as_str()));
+                if found.is_none() {
+                    eprintln!(
+                        "Warning: output '{}' not found, using compositor default",
+                        wanted
+                    );
+                }
+                found.map(|o| &o.output)
+            }
+            None => None,
+        };
+
         let layer_surface = layer_shell.get_layer_surface(
             &surface,
-            None,
+            output,
             zwlr_layer_shell_v1::Layer::Top,
             "showkeys".to_string(),
             &qh,

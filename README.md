@@ -49,14 +49,13 @@ wl-showkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
 - *-a top|left|right|bottom*: anchor the keystrokes to an edge. May be specified
   twice.
 - *-m margin*: set a margin (in pixels) from the nearest edge
-- *-o output*: request wl-showkeys is shown on the specified output
-  (unimplemented)
+- *-o output*: request wl-showkeys is shown on the specified output (i.e. `-o HDMI-A-1`)
 
 ## Roadmap / Todolist
 
+- [x] add the ability to chose output and draw on specified screen
 - [ ] add the ability to configure it with a `~/.config/showkeys/config.toml` file
 - [ ] args should be handled better and override config
-- [ ] add the ability to chose output and draw on specified screen
 - [ ] more configuration options (spacing ?, color?)
 - [ ] handle special characters better
 - [ ] automatic install script / distro packages ?
