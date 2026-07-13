@@ -168,6 +168,10 @@ impl AppState {
                         special = true;
                         "<Alt>"
                     }
+                    "Meta_L" | "Meta_R" => {
+                        special = true;
+                        "<Alt>"
+                    }
                     "ISO_Level3_Shift" => {
                         special = true;
                         "<AltGr>"
