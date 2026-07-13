@@ -208,7 +208,7 @@ pub struct DevMgr {
 impl DevMgr {
     pub fn start(devpath: &str) -> Result<Self, Box<dyn std::error::Error>> {
         if geteuid().as_raw() != 0 {
-            return Err("wshowkeys needs to be setuid to read input events".into());
+            return Err("wl-showkeys needs to be setuid to read input events".into());
         }
 
         let (sock0, sock1) = socketpair(

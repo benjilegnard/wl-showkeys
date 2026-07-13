@@ -754,7 +754,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "-h" | "--help" => {
                 eprintln!(
-                    "usage: wshowkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]\n\t[-a top|left|right|bottom] [-m margin] [-p padding] [-o output]"
+                    "usage: wl-showkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]\n\t[-a top|left|right|bottom] [-m margin] [-p padding] [-o output]"
                 );
                 return Ok(());
             }
