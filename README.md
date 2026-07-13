@@ -40,7 +40,7 @@ permissions to read input events, which it drops after startup.
 
 ```
 wl-showkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
-    [-a top|left|right|bottom] [-m margin] [-o output]
+    [-a top|left|right|bottom] [-m margin] [-p padding] [-o output]
 ```
 
 - *-b #RRGGBB[AA]*: set background color
@@ -51,6 +51,7 @@ wl-showkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]
 - *-a top|left|right|bottom*: anchor the keystrokes to an edge. May be specified
   twice.
 - *-m margin*: set a margin (in pixels) from the nearest edge
+- *-p padding*: set the gap (in pixels) drawn between keys
 - *-o output*: request wl-showkeys is shown on the specified output (i.e. `-o HDMI-A-1`)
 
 ## Roadmap / Todolist

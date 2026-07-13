@@ -78,6 +78,8 @@ struct AppState {
     run: bool,
     anchor: u32,
     margin: i32,
+    // Horizontal gap (in pixels) inserted between drawn keys.
+    padding: u32,
 
     // Name of the output requested via -o, if any.
     output_name: Option<String>,
@@ -114,6 +116,7 @@ impl AppState {
             run: true,
             anchor: 0,
             margin: 32,
+            padding: 5,
             output_name: None,
         }
     }
@@ -140,7 +143,12 @@ impl AppState {
         Self::cairo_set_source_u32(cairo, self.background);
         cairo.paint().unwrap();
 
-        for key in &self.keys {
+        for (idx, key) in self.keys.iter().enumerate() {
+            // Insert padding between keys (not before the first one).
+            if idx > 0 {
+                *width += self.padding * scale as u32;
+            }
+
             let mut special = false;
             let name: &str;
 
@@ -728,6 +736,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     state.margin = args[i].parse().unwrap_or(32);
                 }
             }
+            "-p" => {
+                i += 1;
+                if i < args.len() {
+                    state.padding = args[i].parse().unwrap_or(5);
+                }
+            }
             "-o" => {
                 i += 1;
                 if i < args.len() {
@@ -736,7 +750,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "-h" | "--help" => {
                 eprintln!(
-                    "usage: wshowkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]\n\t[-a top|left|right|bottom] [-m margin] [-o output]"
+                    "usage: wshowkeys [-b|-f|-s #RRGGBB[AA]] [-F font] [-t timeout]\n\t[-a top|left|right|bottom] [-m margin] [-p padding] [-o output]"
                 );
                 return Ok(());
             }
