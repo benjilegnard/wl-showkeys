@@ -21,18 +21,20 @@ These dependencies should be available on your linux system
 - wayland 
 - xkbcommon 
 
-## Compilation
+## Compilation & Installation
+
+Build and install to a global bin directory (`/usr/local/bin` by default):
 
 ```
-cargo build --release
-sudo chown root target/release/wl-showkeys
-sudo chmod u+s target/release/wl-showkeys
-cp ./target/release/wl-showkeys ~/.local/bin/
+./install.sh
 ```
 
-`wl-showkeys` must be configured as setuid during installation.
-It requires root permissions to read input events.
-These permissions are dropped after startup.
+The binary is built as your user, then installed with `sudo` (it prompts for
+your password). Set a different location with `PREFIX=/usr ./install.sh` or
+`BINDIR=~/.local/bin ./install.sh`.
+
+`wl-showkeys` is configured as setuid root during install. It needs root
+permissions to read input events, which it drops after startup.
 
 ## Usage
 
